@@ -7,31 +7,28 @@ from torch.utils.data import Dataset
 
 standard_path = Path("data/raw")
 
-
-class MyDataset(Dataset):
-    """My custom dataset."""
-
-    def __init__(self, raw_data_path: Path = standard_path) -> None:
-        self.data_path = raw_data_path
-        print(raw_data_path)
-        self.X_URINE, self.labels_URINE = self.load_urine_data()
-        self.X_OIL, self.OIL_labels = self.load_oil_data()
-        self.X_WINE, self.WINE_PARAMETERS, self.PPM_WINE, self.WINE_labels = self.load_wine_data()
-        self.X_ALKO, self.Y_ALKO, self.ALKO_labels, self.axis = self.load_alko_data()
-        self.X_ART_NOISY, self.X_ART, self.H_ART, self.W_ART, self.TAU_ART = self.generate_artificial_data()
-
+class NMRDataset(Dataset):
+    """NMR dataset"""
     def __len__(self) -> int:
         """Return the length of the dataset."""
-        return len(self.X_URINE)  # Adjust this as needed
+        return len(self.X)  # Adjust this as needed
+    def __shape__(self) -> tuple:
+        """Return the shape of the dataset."""
+        return self.X.shape
 
     def __getitem__(self, index: int):
         """Return a given sample from the dataset."""
-        return self.X_URINE[index]  # Adjust this as needed
+        return self.X[index]  # Adjust this as needed
+    
+    def downscale(self, factor: int) -> np.ndarray:
+        """Return a downsampled version of the dataset."""
+        self.X = self.X[:, ::factor]
 
-    def preprocess(self, output_folder: Path) -> None:
-        """Preprocess the raw data and save it to the output folder."""
-        # Implement any preprocessing steps here
-        pass
+
+class UrineDataset(NMRDataset):
+    def __init__(self, raw_data_path: Path = standard_path) -> None:
+        self.data_path = raw_data_path
+        self.X, self.Y = self.load_urine_data()
 
     def load_urine_data(self):
         mat = scipy.io.loadmat(self.data_path / 'nmrdata.mat')
@@ -40,12 +37,23 @@ class MyDataset(Dataset):
         labels_URINE = mat[0][0][1]
         return X_URINE, labels_URINE
 
+class OilDataset(NMRDataset):
+    def __init__(self, raw_data_path: Path = standard_path) -> None:
+        self.data_path = raw_data_path
+        self.X, self.Y = self.load_oil_data()
+
+
     def load_oil_data(self):
         mat = scipy.io.loadmat(self.data_path / 'nmrdata_Oil_group3.mat')
         mat = mat.get('nmrdata_Oil_group3')
         X_OIL = mat[0][0][0]
         OIL_labels = mat[0][0][1]
         return X_OIL, OIL_labels
+
+class WineDataset(NMRDataset):
+    def __init__(self, raw_data_path: Path = standard_path) -> None:
+        self.data_path = raw_data_path
+        self.X, self.WINE_PARAMETERS, self.PPM_WINE, self.Y = self.load_wine_data()
 
     def load_wine_data(self):
         mat = scipy.io.loadmat(self.data_path / 'NMR_40wines.mat')
@@ -56,6 +64,11 @@ class MyDataset(Dataset):
         WINE_labels = [x[0] for x in labels[0]]
         return X_WINE, WINE_PARAMETERS, PPM_WINE, WINE_labels
 
+class AlkoDataset(NMRDataset):
+    def __init__(self, raw_data_path: Path = standard_path) -> None:
+        self.data_path = raw_data_path
+        self.X, self.Y, self.ALKO_labels, self.axis = self.load_alko_data()
+
     def load_alko_data(self):
         mat = scipy.io.loadmat(self.data_path / 'NMR_mix_DoE.mat')
         X_ALKO = mat.get('xData')
@@ -63,6 +76,12 @@ class MyDataset(Dataset):
         ALKO_labels = mat.get('yLabels')
         axis = mat.get("Axis")
         return X_ALKO, Y_ALKO, ALKO_labels, axis
+
+class ArtificialDataset(NMRDataset):
+    def __init__(self, raw_data_path: Path = standard_path) -> None:
+        self.data_path = raw_data_path
+        self.X, self.X_ART, self.H, self.W, self.TAU = self.generate_artificial_data()
+    
 
     def generate_artificial_data(self):
         N, M, d = 30, 20000, 3
@@ -96,10 +115,6 @@ class MyDataset(Dataset):
         V = np.fft.ifft(Vf)
         return V.real
 
-def preprocess(raw_data_path: Path, output_folder: Path) -> None:
-    print("Preprocessing data...")
-    dataset = MyDataset(raw_data_path)
-    dataset.preprocess(output_folder)
-
 if __name__ == "__main__":
-    typer.run(preprocess)
+    #typer.run(preprocess)
+    print(ArtificialDataset()[0])
