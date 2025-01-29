@@ -1,12 +1,12 @@
 import torch
 import torch.nn.functional as F
 from torch.optim import Adam, lr_scheduler
-from helpers.callbacks import ChangeStopper, ImprovementStopper
-from helpers.losses import frobeniusLoss, VolLoss
+from psim.helpers.callbacks import ChangeStopper, ImprovementStopper
+from psim.helpers.losses import frobeniusLoss, VolLoss
 import scipy
 import numpy as np
-from nnls_l1 import nnls
-from nlars import calc_scoring, get_optimal_W
+from psim.models.nnls_l1 import nnls
+from psim.models.nlars import calc_scoring, get_optimal_W
 
 
 torch.manual_seed(3)

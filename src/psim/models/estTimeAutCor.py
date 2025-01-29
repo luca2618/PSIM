@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.fft import ifft
 # from scipy.optimize import nnls
-from nnls_l1 import nnls
+from psim.models.nnls_l1 import nnls
 
 
 def estTimeAutCor(Xf, A, Sf, krSf, krf, Tau, Nf, N, w, TauW):

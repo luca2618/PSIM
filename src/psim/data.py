@@ -4,16 +4,21 @@ import numpy as np
 import typer
 from torch.utils.data import Dataset
 
+
+standard_path = Path("data/raw")
+
+
 class MyDataset(Dataset):
     """My custom dataset."""
 
-    def __init__(self, raw_data_path: Path) -> None:
+    def __init__(self, raw_data_path: Path = standard_path) -> None:
         self.data_path = raw_data_path
+        print(raw_data_path)
         self.X_URINE, self.labels_URINE = self.load_urine_data()
         self.X_OIL, self.OIL_labels = self.load_oil_data()
         self.X_WINE, self.WINE_PARAMETERS, self.PPM_WINE, self.WINE_labels = self.load_wine_data()
         self.X_ALKO, self.Y_ALKO, self.ALKO_labels, self.axis = self.load_alko_data()
-        self.X_ART_NOISY, self.H_ART, self.W_ART, self.TAU_ART = self.generate_artificial_data()
+        self.X_ART_NOISY, self.X_ART, self.H_ART, self.W_ART, self.TAU_ART = self.generate_artificial_data()
 
     def __len__(self) -> int:
         """Return the length of the dataset."""
@@ -69,14 +74,14 @@ class MyDataset(Dataset):
         tau = np.zeros((N, d))
         tau = np.random.randint(-1000, 1000, size=(N, d))
         H = np.zeros((d, M))
-        from helpers.generators import multiplet
+        from psim.helpers.generators import multiplet
         H[0] = multiplet(t, 3, 6000, 110 * 2, 900) + multiplet(t, 1, 12000, 160 * 2, 0)
         H[1] = multiplet(t, 2, 2000, 150 * 2, 800) + multiplet(t, 2, 14000, 240 * 2, 1200)
         H[2] = multiplet(t, 3, 18000, 300 * 2, 1300) + multiplet(t, 4, 12000, 120 * 2, 800)
         X_ART = self.shift_dataset(W, H, tau)
         NOISE_ART = np.random.normal(0, 5e-6, X_ART.shape)
         X_ART_NOISY = X_ART + NOISE_ART
-        return X_ART_NOISY, H, W, tau
+        return X_ART_NOISY, X_ART, H, W, tau
 
     def shift_dataset(self, W, H, tau):
         Nf = H.shape[1] // 2 + 1

@@ -1,8 +1,8 @@
 
 import numpy as np
 
-from helpers.generators import *
-from Hardmodel_single_peaks import Single_Model
+from psim.helpers.generators import *
+from psim.models.Hardmodel_single_peaks import Single_Model
 import scipy
 from scipy.signal import find_peaks
 from scipy.signal import find_peaks_cwt
