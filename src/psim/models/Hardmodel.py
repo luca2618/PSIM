@@ -215,7 +215,7 @@ class Hard_Model(torch.nn.Module):
 
 
 if __name__ == "__main__":
-    from helpers.callbacks import explained_variance
+    from psim.helpers.callbacks import explained_variance
     #from helpers.data import X_clean
     import matplotlib.pyplot as plt
     import numpy as np

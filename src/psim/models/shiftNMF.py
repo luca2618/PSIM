@@ -10,30 +10,32 @@ from psim.helpers.losses import frobeniusLoss
 
 
 class ShiftNMF(torch.nn.Module):
-    def __init__(self, X, rank, lr=0.2, alpha=1e-4, factor=1, min_imp=1e-3, patience=10):
+    def __init__(self, X, rank, lr=0.2, alpha=1e-4, factor=1, min_imp=1e-2, patience=10, device=None, std=True):
         super().__init__()
 
         self.rank = rank
-        self.X = torch.tensor(X)
+        self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.X = torch.tensor(X).to(self.device)
         self.std = torch.std(self.X)
         self.X_MAX = torch.max(self.X)
         # self.X = self.X / self.X_MAX  #self.std
-        self.X = self.X / self.std
+        if std:
+            self.X = self.X / self.std
         
         self.N, self.M = X.shape
 
-        self.softmax = torch.nn.Softmax(dim=1)
-        self.softplus = torch.nn.Softplus()
+        self.softmax = torch.nn.Softmax(dim=1).to(self.device)
+        self.softplus = torch.nn.Softplus().to(self.device)
         #scale applied to self.H
         self.scale = lambda x : self.softplus(x)
         self.lossfn = frobeniusLoss(torch.fft.fft(self.X))
         
         # Initialization of Tensors/Matrices a and b with size NxR and RxM
-        self.W = torch.nn.Parameter(torch.randn(self.N, rank, requires_grad=True, dtype=torch.double))
-        self.H = torch.nn.Parameter(torch.randn(rank, self.M, requires_grad=True, dtype=torch.double))
+        self.W = torch.nn.Parameter(torch.randn(self.N, rank, requires_grad=True, dtype=torch.double).to(self.device))
+        self.H = torch.nn.Parameter(torch.randn(rank, self.M, requires_grad=True, dtype=torch.double).to(self.device))
         #self.H = torch.tensor(PCA_init(X.T.real, rank).real.T, requires_grad=True, dtype=torch.double)
         #self.H = torch.nn.Parameter(inv_softplus(self.H))
-        self.tau = torch.zeros(self.N, self.rank,dtype=torch.double)
+        self.tau = torch.zeros(self.N, self.rank,dtype=torch.double).to(self.device)
         
         self.stopper = ChangeStopper(alpha=alpha, patience=patience)
         
@@ -46,11 +48,14 @@ class ShiftNMF(torch.nn.Module):
         else:
             self.scheduler = None
 
-    def forward(self):
+    def forward(self, positive_constraint : bool = True):
         # Get half of the frequencies
         Nf = self.M // 2 + 1
         # Fourier transform of H along the second dimension
-        Hf = torch.fft.fft(self.scale(self.H), dim=1)[:, :Nf]
+        if  positive_constraint:
+            Hf = torch.fft.fft(self.scale(self.H), dim=1)[:, :Nf]
+        else:
+            Hf = torch.fft.fft(self.H, dim=1)[:, :Nf]
         # Keep only the first Nf[1] elements of the Fourier transform of H
         # Construct the shifted Fourier transform of H
         Hf_reverse = torch.flip(Hf[:, 1:Nf-1], dims=[1])
@@ -65,36 +70,36 @@ class ShiftNMF(torch.nn.Module):
         return V
     
     def fit_tau(self, update_T = True, update_W = True):
-        X = np.array(self.X.detach().numpy().real, dtype=np.double)
+        X = np.array(self.X.detach().cpu().numpy().real, dtype=np.double)
         
         # W = np.array(self.softplus(self.W).detach().numpy(), dtype=np.complex128)
-        H = np.array(self.scale(self.H).detach().numpy(), dtype=np.double)
+        H = np.array(self.scale(self.H).detach().cpu().numpy(), dtype=np.double)
         
-        tau = np.array(self.tau.detach().numpy(), dtype=np.double)
+        tau = np.array(self.tau.detach().cpu().numpy(), dtype=np.double)
         
         # W = np.zeros((self.N, self.rank))
-        W = np.array(self.W.detach().numpy(), dtype=np.double)
+        W = np.array(self.W.detach().cpu().numpy(), dtype=np.double)
 
         T, A = estT(X,W,H, Lambda = self.Lambda)
         # T, A = estT(X, W, H, tau, Lambda = self.Lambda)
         # W = inv_softplus(W.real)
 
         if update_T:
-            self.tau = torch.tensor(T, dtype=torch.double)
+            self.tau = torch.tensor(T, dtype=torch.double).to(self.device)
         # self.tau = torch.tensor(T, dtype=torch.cdouble)
 
         # self.W = torch.nn.Parameter(W)
         if update_W:
-            self.W = torch.nn.Parameter(torch.tensor(A, dtype=torch.double, requires_grad=True))
+            self.W = torch.nn.Parameter(torch.tensor(A, dtype=torch.double, requires_grad=True).to(self.device))
     
     def center_tau(self):
-        tau = self.tau.detach().numpy()
+        tau = self.tau.detach().cpu().numpy()
         mean_tau = np.mean(tau, axis=0)
         mean_tau = np.round(mean_tau)
         #convert means to tuple of ints
         mean_tau = tuple(mean_tau.astype(int))
 
-        H_roll = torch.zeros_like(self.H, dtype = torch.double)
+        H_roll = torch.zeros_like(self.H, dtype = torch.double).to(self.device)
         for i in range(self.rank):
             H_roll[i] = torch.roll(self.H[i],
                                 mean_tau[i])
@@ -103,7 +108,7 @@ class ShiftNMF(torch.nn.Module):
         
         tau = tau - mean_tau
         
-        self.tau = torch.tensor(tau, dtype=torch.double)
+        self.tau = torch.tensor(tau, dtype=torch.double).to(self.device)
         self.H = torch.nn.Parameter(H_roll)
     def fit_grad(self, grad):
         stopper = ChangeStopper(alpha=1e-5, patience=5)
@@ -171,9 +176,9 @@ class ShiftNMF(torch.nn.Module):
         #self.fit_grad(self.full_optimizer)
         self.center_tau()
         
-        W = self.W.detach().numpy()
-        H = (self.scale(self.H)*self.std).detach().numpy()
-        tau = self.tau.detach().numpy()
+        W = self.W.detach().cpu().numpy()
+        H = (self.scale(self.H)*self.std).detach().cpu().numpy()
+        tau = self.tau.detach().cpu().numpy()
         tau = np.array(tau, dtype=np.int32)
 
         output = self.forward()

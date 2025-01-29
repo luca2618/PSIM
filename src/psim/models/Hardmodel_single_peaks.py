@@ -115,8 +115,8 @@ class Single_Model(torch.nn.Module):
         self.C = torch.zeros((self.rank, self.n_col))
         local_sigma = self.sigma.detach()
         local_N = self.N.detach()
-        local_sigma[self.peak_i] = sigma
-        local_N[self.peak_i] = N
+        local_sigma[self.peak_i] = torch.tensor(sigma)
+        local_N[self.peak_i] = torch.tensor(N)
         
         for i in range(self.rank):
             self.C[i] += self.voigt(time,
